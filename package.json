@@ -1,0 +1,17 @@
+{
+  "name": "ttukttak",
+  "version": "0.1.0",
+  "private": true,
+  "description": "뚝딱 - 매장 안내문 만들기 MVP",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.8.1"
+  }
+}
