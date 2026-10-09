@@ -171,7 +171,7 @@ function home() {
   <main class="screen home">
     <section class="hero">
       <h1>어떤 안내문을<br class="m-only"> 만들까요?</h1>
-      <p class="lead">날짜·시간만 넣으면 바로 붙일 수 있는 A4 안내문이 완성돼요.</p>
+      <p class="lead">날짜·시간만 넣으면 바로 붙일 수 있는 안내문이 완성돼요.</p>
     </section>
     <div class="type-list">
       ${TYPES.map((t) => {
