@@ -33,7 +33,7 @@ function deviceType() {
   return window.matchMedia('(max-width: 759px)').matches ? 'mobile' : 'desktop';
 }
 
-// 광고·공유 링크로 들어온 경로 (utm_*) — 첫 방문 기준
+// 광고·공유 링크로 들어온 경로 (utm_*) — 이번에 페이지를 연 주소 기준
 function campaign() {
   const q = new URLSearchParams(location.search);
   const out = {};

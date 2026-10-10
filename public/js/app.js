@@ -132,7 +132,18 @@ function render() {
   if (FLOW.has(state.step) && !state.type) state.step = 'home';
   if ((state.step === 'extra' || state.step === 'done') && !state.template) state.step = state.type ? 'template' : 'home';
   syncChrome();
-  ({ splash, home, info, template: templateScreen, extra, done, library }[state.step] || splash)();
+  const screens = { splash, home, info, template: templateScreen, extra, done, library };
+  const screen = screens[state.step] ? state.step : 'splash';
+  screens[screen]();
+  trackScreen(screen);
+}
+
+// 화면이 바뀔 때마다 한 번 (뒤로 가기 포함). 같은 화면을 다시 그릴 때는 세지 않는다
+let lastScreen = null;
+function trackScreen(screen) {
+  if (screen === lastScreen) return;
+  track('screen_view', { screen, from_screen: lastScreen, notice_type: FLOW.has(screen) ? state.type : null });
+  lastScreen = screen;
 }
 
 let lastWidth = window.innerWidth;
@@ -430,8 +441,6 @@ function templateScreen() {
     return;
   }
   state.tplIndex = Math.min(state.tplIndex, list.length - 1);
-  flow.browsed = new Set();
-  track('template_view', { notice_type: state.type, occasion: occasionOf(), template_count: list.length });
   $view.innerHTML = `
   <main class="screen flow">
     ${topbar('template', '디자인 고르기')}
@@ -611,9 +620,9 @@ function saveToLibrary() {
   if (idx >= 0) lib.splice(idx, 1);
   lib.unshift(entry);
   lib.length = Math.min(lib.length, LIBRARY_MAX);
-  track('library_save', { template_id: entry.template.id, notice_type: entry.type, is_update: idx >= 0 });
   state.libraryId = entry.id;
-  if (!store.set(LIBRARY_KEY, lib)) toast('보관함에 저장하지 못했어요 (저장 공간 부족)');
+  if (!store.set(LIBRARY_KEY, lib)) return toast('보관함에 저장하지 못했어요 (저장 공간 부족)');
+  track('library_save', { template_id: entry.template.id, notice_type: entry.type, is_update: idx >= 0 });
 }
 
 function libraryTitle(item) {
@@ -830,6 +839,9 @@ $root.addEventListener('click', async (e) => {
         has_store_name: !!(state.data.showStore && state.data.storeName?.trim()),
         duration_sec: secSince(flow.infoAt),
       });
+      // 다음 단계에서 뒤로 돌아와 다시 그릴 때는 세지 않도록 정보 입력을 마칠 때 기록한다
+      flow.browsed = new Set();
+      track('template_view', { notice_type: state.type, occasion: occasionOf(), template_count: templatesOf(state.type).length });
       return go('template');
     }
     case 'prev':
@@ -866,8 +878,10 @@ $root.addEventListener('click', async (e) => {
         const c = document.createElement('canvas');
         await renderNotice(c, { ...currentItem(), width: A4.W });
         const file = new File([await canvasToPng(c)], fileName(currentItem(), 'png'), { type: 'image/png' });
-        if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: '매장 안내' });
-        track('notice_share', { template_id: state.template.id, notice_type: state.type });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: '매장 안내' });
+          track('notice_share', { template_id: state.template.id, notice_type: state.type });
+        }
       } catch { /* 사용자가 공유 취소 */ } finally { el.disabled = false; }
       return;
     }
