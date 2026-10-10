@@ -140,7 +140,7 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 function redraw() {
-  if (state.step === 'splash') drawTypeThumbs();
+  if (state.step === 'splash') drawSplashPosters();
   if (state.step === 'info') drawLive();
   if (state.step === 'template') templatesOf(state.type).forEach(drawSlide);
   if (state.step === 'extra' || state.step === 'done') drawFinal();
@@ -155,17 +155,16 @@ function splash() {
     <h1>원하는 안내문,<br>뚝딱 만들어 드려요</h1>
     <span class="pill-tag">회원가입 없이 무료</span>
     <div class="stage" aria-hidden="true">
-      ${TYPES.map((t) => `<div class="ccard" data-art="${t.id}">
-          <span class="ccard-label">${esc(t.short)}</span>
-          <div class="type-thumb" data-thumb="${t.id}"></div>
-        </div>`).join('')}
+      <div class="stage-track" id="stage-track" style="--n:${SPLASH_POSTERS.length}">
+        ${Array.from({ length: SPLASH_POSTERS.length * 3 }, (_, k) => `<div class="ccard"><div class="type-thumb" data-poster="${k}"></div></div>`).join('')}
+      </div>
     </div>
     <div class="splash-cta">
       <button class="btn primary big" data-act="start">안내문 만들기 시작</button>
       <button class="link-btn" data-act="nav-library">내 보관함 보기</button>
     </div>
   </main>`;
-  drawTypeThumbs();
+  drawSplashPosters();
 }
 
 // ---------- 공지 유형 선택 ----------
@@ -194,17 +193,41 @@ function home() {
   </main>`;
 }
 
-function drawTypeThumbs() {
-  for (const t of TYPES) {
-    const holder = $view.querySelector(`[data-thumb="${t.id}"]`);
-    if (!holder) continue;
-    const sample = sampleData(t.id);
-    const tpl = templatesOf(t.id, sample.name)[0];
-    if (!tpl) { holder.textContent = t.short; holder.classList.add('icon-only'); continue; }
-    if (tpl.thumbnail) { holder.innerHTML = `<img src="${esc(tpl.thumbnail)}" alt="">`; continue; }
+// 첫 화면에 띄우는 포스터 — 피그마 시안 01 추석, 04 레드 크리스마스, 16 사진(노을), 11 주간 Notice, 10 메모지, 09 블루 그라데이션, 03 크리스마스 트리
+const SPLASH_POSTERS = [
+  { id: 'chuseok-moon', type: 'holiday', data: { ...sampleData('holiday', '추석'), start: '2026-09-24', end: '2026-09-27', mode: 'allClosed', days: {}, storeName: '뚝딱 베이커리' } },
+  { id: 'xmas-red', type: 'holiday', data: { ...sampleData('holiday', '크리스마스'), storeName: '뚝딱 카페' } },
+  { id: 'photo', type: 'closed', palette: 'dusk', data: { ...sampleData('closed'), start: '2026-08-03', end: '2026-08-07', multi: true, reason: '', storeName: '뚝딱 플라워' } },
+  { id: 'week-notice', type: 'closed', data: { ...sampleData('closed'), start: '2026-03-16', end: '2026-03-17', multi: true, reason: '', storeName: '뚝딱 공방' } },
+  { id: 'memo-dark', type: 'holiday', data: { ...sampleData('holiday', '크리스마스'), mode: 'allClosed', days: {}, storeName: '뚝딱 카페' } },
+  { id: 'blue-gradient', type: 'closed', data: { ...sampleData('closed'), start: '2026-08-03', end: '2026-08-10', multi: true, reason: '', storeName: '뚝딱 카페' } },
+  { id: 'xmas-tree', type: 'holiday', data: { ...sampleData('holiday', '크리스마스'), storeName: '뚝딱 카페' } },
+];
+
+// 끊김 없이 흘러가도록 포스터를 3벌 이어 붙인다 (움직임은 CSS 애니메이션).
+// 그리기는 한 벌만 하고 나머지는 그린 캔버스를 복사한다.
+async function drawSplashPosters() {
+  const n = SPLASH_POSTERS.length;
+  await Promise.all(SPLASH_POSTERS.map((p, i) => {
+    const holder = $view.querySelector(`[data-poster="${n + i}"]`);
+    const tpl = state.templates.find((t) => t.id === p.id) || DEFAULT_TEMPLATES.find((t) => t.id === p.id);
+    if (!holder || !tpl) return null;
     let c = holder.querySelector('canvas');
     if (!c) { c = document.createElement('canvas'); holder.appendChild(c); }
-    draw(c, { type: t.id, data: sample, template: tpl, paletteId: paletteOf(tpl) });
+    return draw(c, { type: p.type, data: p.data, template: tpl, paletteId: p.palette || tpl.palettes[0] });
+  }));
+  for (let i = 0; i < n; i++) {
+    const src = $view.querySelector(`[data-poster="${n + i}"] canvas`);
+    if (!src?.width) continue;
+    for (const k of [i, 2 * n + i]) {
+      const holder = $view.querySelector(`[data-poster="${k}"]`);
+      if (!holder) continue;
+      let c = holder.querySelector('canvas');
+      if (!c) { c = document.createElement('canvas'); holder.appendChild(c); }
+      c.width = src.width;
+      c.height = src.height;
+      c.getContext('2d').drawImage(src, 0, 0);
+    }
   }
 }
 
