@@ -2,6 +2,7 @@ import { TYPES, LAYOUTS, REASONS, OCCASIONS, EXTRA_FIELDS, DEFAULT_TEMPLATES, DE
 import { defaultData, sampleData, dateRange, fmtLong, addDays, holidayRows, holidayPeriodName, buildDoc } from './copy.js';
 import { renderNotice } from './render.js';
 import { canvasToPdf, canvasToPng, saveBlob } from './export.js';
+import { track, initAnalytics, setUser } from './analytics.js';
 
 const $root = document.getElementById('app');
 const STEPS = ['info', 'template', 'extra', 'done'];
@@ -33,8 +34,15 @@ store.set('nh.vid', vid);
 let sid;
 try { sid = sessionStorage.getItem('nh.sid') || uid(); sessionStorage.setItem('nh.sid', sid); } catch { sid = uid(); }
 
-function track(name, props = {}) {
-  fetch('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid, vid, name, props }), keepalive: true }).catch(() => {});
+// 분석: 만들기 흐름 동안의 기록 (걸린 시간, 넘겨 본 디자인, 입력한 추가 항목)
+const flow = { startedAt: 0, infoAt: 0, browsed: new Set(), filled: new Set() };
+const secSince = (t) => (t ? Math.round((Date.now() - t) / 1000) : null);
+const occasionOf = () => (state.type === 'holiday' ? state.data?.name : null);
+function dayCount(type, d) {
+  if (!d) return 0;
+  if (type === 'soldout') return 1;
+  if (type === 'holiday' || d.multi) return dateRange(d.start, d.end).length;
+  return 1;
 }
 
 // ---------- 유틸 ----------
@@ -254,7 +262,9 @@ function chooseType(type) {
     state.libraryId = null;
   }
   state.type = type;
-  track('type_select', { type });
+  flow.infoAt = Date.now();
+  if (!flow.startedAt) flow.startedAt = flow.infoAt;
+  track('notice_type_select', { notice_type: type });
   go('info');
 }
 
@@ -420,6 +430,8 @@ function templateScreen() {
     return;
   }
   state.tplIndex = Math.min(state.tplIndex, list.length - 1);
+  flow.browsed = new Set();
+  track('template_view', { notice_type: state.type, occasion: occasionOf(), template_count: list.length });
   $view.innerHTML = `
   <main class="screen flow">
     ${topbar('template', '디자인 고르기')}
@@ -476,6 +488,7 @@ function updateTplInfo() {
   const list = templatesOf(state.type);
   const t = list[state.tplIndex];
   if (!t) return;
+  flow.browsed.add(t.id);
   $view.querySelectorAll('[data-dot]').forEach((el) => el.classList.toggle('on', Number(el.dataset.dot) === state.tplIndex));
   $view.querySelectorAll('[data-slide-i]').forEach((el) => el.classList.toggle('on', Number(el.dataset.slideI) === state.tplIndex));
   const layout = LAYOUTS[t.layout] || LAYOUTS.clean;
@@ -549,7 +562,7 @@ function fileName(item, ext) {
 
 const currentItem = () => ({ type: state.type, data: state.data, template: state.template, paletteId: paletteOf(state.template) });
 
-async function exportItem(item, format, btn) {
+async function exportItem(item, format, btn, source = 'flow') {
   const label = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = '만드는 중…'; }
   try {
@@ -558,7 +571,18 @@ async function exportItem(item, format, btn) {
     const blob = format === 'pdf' ? await canvasToPdf(c) : await canvasToPng(c);
     saveBlob(blob, fileName(item, format));
     fetch('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ templateId: item.template.id, format }) }).catch(() => {});
-    track('download', { templateId: item.template.id, format });
+    const count = (store.get('nh.dlCount', 0) || 0) + 1;
+    store.set('nh.dlCount', count);
+    track('notice_download', {
+      format,
+      source,
+      template_id: item.template.id,
+      notice_type: item.type,
+      occasion: item.type === 'holiday' ? item.data.name : null,
+      is_first_download: count === 1,
+      total_duration_sec: source === 'flow' ? secSince(flow.startedAt) : null,
+    });
+    setUser({ add: { notice_count: 1 }, set: { last_notice_type: item.type, store_name_set: !!item.data.storeName?.trim() } });
     return true;
   } catch (e) {
     console.error(e);
@@ -587,6 +611,7 @@ function saveToLibrary() {
   if (idx >= 0) lib.splice(idx, 1);
   lib.unshift(entry);
   lib.length = Math.min(lib.length, LIBRARY_MAX);
+  track('library_save', { template_id: entry.template.id, notice_type: entry.type, is_update: idx >= 0 });
   state.libraryId = entry.id;
   if (!store.set(LIBRARY_KEY, lib)) toast('보관함에 저장하지 못했어요 (저장 공간 부족)');
 }
@@ -652,6 +677,9 @@ function drawLibraryThumbs() {
 }
 
 function editFromLibrary(item) {
+  track('library_open', { template_id: item.template.id, notice_type: item.type, days_since_saved: Math.floor((Date.now() - item.updatedAt) / 86400000) });
+  flow.startedAt = Date.now();
+  flow.infoAt = flow.startedAt;
   // 최신 템플릿이 있으면 그것으로, 삭제된 템플릿이면 보관해둔 스냅샷으로 연다
   const live = state.templates.find((t) => t.id === item.template.id);
   state.type = item.type;
@@ -731,6 +759,7 @@ $root.addEventListener('click', async (e) => {
   if (el.dataset.palette) {
     const t = templatesOf(state.type)[state.tplIndex];
     state.palette[t.id] = el.dataset.palette;
+    track('template_variant_change', { template_id: t.id, variant: el.dataset.palette });
     drawSlide(t);
     return updateTplInfo();
   }
@@ -750,6 +779,8 @@ $root.addEventListener('click', async (e) => {
     } else {
       d[key] = v;
     }
+    if (state.step === 'info') track('info_field_change', { notice_type: state.type, field: key.startsWith('day:') ? 'day_status' : key, value: String(v) });
+    if (state.step === 'extra' && v) markFilled(key);
     const y = window.scrollY;
     if (state.step === 'extra') extra(); else info();
     window.scrollTo(0, y);
@@ -760,17 +791,21 @@ $root.addEventListener('click', async (e) => {
   const libItem = () => getLibrary().find((x) => x.id === el.dataset.id);
   switch (act) {
     case 'start':
-      track('start');
+      flow.startedAt = Date.now();
+      track('create_start', { entry: 'splash' });
       return go('home');
     case 'nav-splash':
       if (FLOW.has(state.step) && state.step !== 'done') return;
       return go('splash');
     case 'nav-create':
       if (FLOW.has(state.step) && state.step !== 'done') return; // 만드는 중에는 그대로
+      flow.startedAt = Date.now();
+      track('create_start', { entry: 'nav' });
       return go('home');
     case 'nav-library':
       return go('library');
     case 'back':
+      track('step_back', { from_step: state.step, notice_type: state.type });
       return history.length > 1 ? history.back() : go('home');
     case 'menu-add':
       state.data.menus.push('');
@@ -781,9 +816,20 @@ $root.addEventListener('click', async (e) => {
       return info();
     case 'info-next': {
       const msg = validate();
-      if (msg) { document.getElementById('err').textContent = msg; return; }
+      if (msg) {
+        document.getElementById('err').textContent = msg;
+        track('info_error', { notice_type: state.type, error: msg });
+        return;
+      }
       store.set('nh.common', { storeName: state.data.storeName, showStore: state.data.showStore });
-      track('info_done', { type: state.type });
+      track('info_complete', {
+        notice_type: state.type,
+        occasion: occasionOf(),
+        mode: state.data.mode ?? null,
+        day_count: dayCount(state.type, state.data),
+        has_store_name: !!(state.data.showStore && state.data.storeName?.trim()),
+        duration_sec: secSince(flow.infoAt),
+      });
       return go('template');
     }
     case 'prev':
@@ -793,7 +839,15 @@ $root.addEventListener('click', async (e) => {
     }
     case 'pick': {
       state.template = templatesOf(state.type)[state.tplIndex];
-      track('template_select', { templateId: state.template.id, palette: paletteOf(state.template) });
+      flow.filled = new Set();
+      track('template_select', {
+        template_id: state.template.id,
+        variant: paletteOf(state.template),
+        notice_type: state.type,
+        occasion: occasionOf(),
+        position: state.tplIndex + 1,
+        browse_count: flow.browsed.size,
+      });
       return go('extra');
     }
     case 'download-pdf':
@@ -813,7 +867,7 @@ $root.addEventListener('click', async (e) => {
         await renderNotice(c, { ...currentItem(), width: A4.W });
         const file = new File([await canvasToPng(c)], fileName(currentItem(), 'png'), { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: '매장 안내' });
-        track('share', { templateId: state.template.id });
+        track('notice_share', { template_id: state.template.id, notice_type: state.type });
       } catch { /* 사용자가 공유 취소 */ } finally { el.disabled = false; }
       return;
     }
@@ -821,7 +875,7 @@ $root.addEventListener('click', async (e) => {
       const s = state.survey;
       s.comment = document.getElementById('survey-comment')?.value || '';
       fetch('/api/survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid, templateId: state.template?.id, rating: s.rating || null, willUse: s.willUse, comment: s.willUse === false ? s.comment : '' }) }).catch(() => {});
-      track('survey', { rating: s.rating, willUse: s.willUse });
+      track('survey_submit', { rating: s.rating || null, will_use: s.willUse, has_comment: !!(s.willUse === false && s.comment.trim()) });
       s.sent = true;
       return rerenderSurvey();
     }
@@ -830,11 +884,13 @@ $root.addEventListener('click', async (e) => {
       state.template = null;
       state.libraryId = null;
       state.survey = { rating: 0, willUse: null, comment: '', sent: false };
+      flow.startedAt = Date.now();
+      track('create_start', { entry: 'restart' });
       return go('home');
     case 'lib-pdf':
     case 'lib-png': {
       const item = libItem();
-      if (item) exportItem(item, act === 'lib-pdf' ? 'pdf' : 'png', el);
+      if (item) exportItem(item, act === 'lib-pdf' ? 'pdf' : 'png', el, 'library');
       return;
     }
     case 'lib-edit': {
@@ -849,6 +905,15 @@ $root.addEventListener('click', async (e) => {
     }
   }
 });
+
+// 추가 정보(사유·추가 문구·다음 영업)는 흐름마다 항목별로 한 번만 기록한다
+const EXTRA_KEY = { reason: 'reason', reasonCustom: 'reason', note: 'note', nextOpenDate: 'next_open', nextOpenTime: 'next_open' };
+function markFilled(key) {
+  const field = EXTRA_KEY[key];
+  if (!field || flow.filled.has(field)) return;
+  flow.filled.add(field);
+  track('extra_field_fill', { field, notice_type: state.type, template_id: state.template?.id });
+}
 
 function onInput(e) {
   const el = e.target;
@@ -865,6 +930,7 @@ function onInput(e) {
   }
   const d = state.data;
   d[k] = el.type === 'checkbox' ? el.checked : el.value;
+  if (e.type === 'change' && state.step === 'extra' && el.value) markFilled(k);
   if (k === 'start' && d.end && d.end < d.start) d.end = state.type === 'holiday' ? addDays(d.start, 2) : addDays(d.start, 1);
   if (state.step === 'extra') drawFinal(250);
   if (state.step === 'info') drawLive(300);
@@ -890,7 +956,10 @@ async function boot() {
     // 서버 없이 열었을 때도 동작하도록 기본 템플릿 사용
     state.templates = DEFAULT_TEMPLATES.filter((t) => t.public);
   }
-  track('visit', { returning: store.get('nh.visited', false) });
+  initAnalytics({ sid, vid });
+  const returning = store.get('nh.visited', false);
+  track('page_view', { is_returning: returning });
+  if (!returning) setUser({ once: { first_visit_date: new Date().toISOString().slice(0, 10) } });
   store.set('nh.visited', true);
   const initial = location.hash === '#library' ? 'library' : 'splash';
   state.step = initial;
