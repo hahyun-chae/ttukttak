@@ -2,7 +2,6 @@ import { TYPES, LAYOUTS, REASONS, OCCASIONS, EXTRA_FIELDS, DEFAULT_TEMPLATES, DE
 import { defaultData, sampleData, dateRange, fmtLong, addDays, holidayRows, holidayPeriodName, buildDoc } from './copy.js';
 import { renderNotice } from './render.js';
 import { canvasToPdf, canvasToPng, saveBlob } from './export.js';
-import { STICKERS } from './stickers.js';
 
 const $root = document.getElementById('app');
 const STEPS = ['info', 'template', 'extra', 'done'];
@@ -168,6 +167,22 @@ function splash() {
 }
 
 // ---------- 공지 유형 선택 ----------
+// 카드 설명 앞 선 아이콘과 오른쪽 아래로 잘려 보이는 단색 도형
+const icon = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const TYPE_ICONS = {
+  holiday: icon('<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M12 13.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3z"/>'),
+  closed: icon('<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M10 13.5l4 4M14 13.5l-4 4"/>'),
+  short: icon('<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.8M5 4.5 3 6.5M19 4.5l2 2"/>'),
+  soldout: icon('<path d="M3.5 12h17a8.5 8.5 0 0 1-17 0z"/><path d="M9 8.5c-.8-1 .8-2 0-3M13 8.5c-.8-1 .8-2 0-3"/>'),
+};
+const shape = (d) => `<svg viewBox="0 0 100 80" preserveAspectRatio="xMidYMax meet">${d}</svg>`;
+const TYPE_SHAPES = {
+  holiday: shape('<path d="M24 14h52l22 44-12 32H14L2 58z"/>'),
+  closed: shape('<path d="M4 20 28 4l22 16L72 4l24 16v70H4z"/>'),
+  short: shape('<circle cx="50" cy="56" r="48"/>'),
+  soldout: shape('<path d="M50 30C42 6 6 6 6 36c0 22 22 36 44 54 22-18 44-32 44-54C94 6 58 6 50 30z"/>'),
+};
+
 function home() {
   $view.innerHTML = `
   <main class="screen home">
@@ -180,13 +195,12 @@ function home() {
         const badge = state.settings.typeBadges?.[t.id];
         const count = templatesOf(t.id, null).length;
         return `<button class="tcard" data-type="${t.id}">
-          <span class="tcard-meta">
-            <span class="tcard-count"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="1.5" width="9" height="12" rx="1.5"/><path d="M5 4.5h4M5 7h4"/><path d="M13.5 4v9.5a1.5 1.5 0 0 1-1.5 1.5H5"/></svg>디자인 ${count}종</span>
-            ${badge ? `<span class="tcard-badge">${esc(badge)}</span>` : ''}
+          <span class="tcard-text">
+            <span class="tcard-title">${esc(t.short)}${badge ? `<span class="tcard-hot">${esc(badge)}</span>` : ''}</span>
+            <span class="tcard-desc">${TYPE_ICONS[t.id]}${esc(t.desc)}</span>
           </span>
-          <span class="tcard-title">${esc(t.short)}</span>
-          <span class="tcard-desc">${esc(t.desc)}</span>
-          <span class="tcard-stickers">${STICKERS[t.id].map((s) => `<span class="sticker">${s}</span>`).join('')}</span>
+          <span class="tcard-shape" aria-hidden="true">${TYPE_SHAPES[t.id]}</span>
+          <span class="tcard-count">디자인 ${count}종</span>
         </button>`;
       }).join('')}
     </div>

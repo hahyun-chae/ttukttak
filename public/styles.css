@@ -138,26 +138,21 @@ body.is-splash .gheader, body.is-splash .bnav { display: none; }
 .hero { padding: var(--s-xxs) 0 var(--s-lg); }
 .hero .lead { color: var(--ink-muted-80); margin: var(--s-xs) 0 0; }
 .type-list { display: grid; grid-template-columns: 1fr; gap: var(--s-sm); }
-/* store-utility-card: 흰 바탕 + 1px 헤어라인 + 18px, 그림자 없음 */
-.tcard { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; height: 264px; padding: var(--s-md) var(--s-lg) 0; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: var(--canvas); overflow: hidden; transition: transform .15s; }
-.tcard:active { transform: scale(.95); }
-.tcard-meta { align-self: stretch; display: flex; justify-content: space-between; align-items: center; min-height: 24px; color: var(--ink-muted-48); font-size: 14px; line-height: 1.43; letter-spacing: -0.224px; }
-.tcard-count { display: inline-flex; align-items: center; gap: 5px; }
-.tcard-count svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
-.tcard-badge { background: var(--accent); color: var(--on-accent); padding: 5px 9px; border-radius: var(--r-pill); font-size: 12px; font-weight: 600; line-height: 1; letter-spacing: -0.12px; }
-/* product-tile 구성: 제목 display-lg → 한 줄 설명 → 이미지 */
-.tcard-title { margin-top: var(--s-xs); font-size: var(--display-size); font-weight: 600; line-height: 1.1; letter-spacing: 0; }
-.tcard-desc { margin-top: var(--s-xs); color: var(--ink-muted-80); }
-/* 스티커(이미지): 흰 테두리 + 이미지 그림자, 카드 하단 밖으로 살짝 잘림 */
-.tcard-stickers { position: absolute; left: 0; right: 0; bottom: -12px; display: flex; justify-content: center; align-items: flex-end; }
-.sticker { width: 100px; margin: 0 -8px; transition: transform .25s cubic-bezier(.2, .8, .2, 1); filter: drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff) drop-shadow(3px 5px 30px rgba(0, 0, 0, .22)); }
-.sticker svg { display: block; width: 100%; height: auto; }
-.sticker:nth-child(1) { transform: rotate(-9deg) translateY(6px); }
-.sticker:nth-child(2) { transform: rotate(3deg); z-index: 1; width: 112px; }
-.sticker:nth-child(3) { transform: rotate(10deg) translateY(4px); }
-.sticker:nth-child(4) { transform: rotate(-4deg) translateY(10px); }
-.tcard[data-type="holiday"] .sticker { width: 86px; }
-.tcard[data-type="holiday"] .sticker:nth-child(2) { width: 94px; }
+/* 유형 카드: 파스텔 바탕 + 오른쪽 아래로 잘려 보이는 단색 도형 + 흰 '디자인 N종' 뱃지 */
+.tcard { --bg: #F2F2F2; --fg: #DCDCDC; position: relative; display: flex; align-items: center; min-height: 132px; padding: var(--s-md) var(--s-lg); border: 0; border-radius: 28px; background: var(--bg); color: var(--ink); text-align: left; overflow: hidden; transition: transform .15s; }
+.tcard:active { transform: scale(.97); }
+.tcard[data-type="holiday"] { --bg: #FFF5C4; --fg: #FFD95E; }
+.tcard[data-type="closed"] { --bg: #B8E4FB; --fg: #5D8BF4; }
+.tcard[data-type="short"] { --bg: #9EE6D6; --fg: #1DC7AE; }
+.tcard[data-type="soldout"] { --bg: #FFB8BC; --fg: #FF4F4F; }
+.tcard-text { position: relative; z-index: 1; display: flex; flex-direction: column; gap: var(--s-xxs); max-width: 62%; }
+.tcard-title { display: flex; align-items: center; gap: var(--s-xxs); font-size: 24px; font-weight: 700; line-height: 1.2; letter-spacing: -0.4px; }
+.tcard-hot { background: var(--ink); color: #fff; padding: 4px 7px; border-radius: var(--r-pill); font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: 0; }
+.tcard-desc { display: flex; align-items: flex-start; gap: 6px; color: rgba(0, 0, 0, .55); font-size: 15px; line-height: 1.35; letter-spacing: -0.224px; }
+.tcard-desc svg { flex: none; width: 19px; height: 19px; margin-top: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tcard-shape { position: absolute; right: 7%; bottom: -14px; width: 32%; max-width: 200px; height: 82%; transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+.tcard-shape svg { display: block; width: 100%; height: 100%; fill: var(--fg); }
+.tcard-count { position: absolute; top: 14px; right: 14px; z-index: 1; background: #fff; padding: 6px 11px; border-radius: 10px; font-size: 13px; font-weight: 500; line-height: 1.2; letter-spacing: -0.2px; }
 
 /* ---------- 진행 바 ---------- */
 .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: var(--s-xs); padding: var(--s-xs) var(--gutter) var(--s-xs) var(--s-xxs); margin: 0 calc(var(--gutter) * -1); background: rgba(245, 245, 247, .8); backdrop-filter: var(--frosted); -webkit-backdrop-filter: var(--frosted); }
@@ -294,11 +289,8 @@ body.is-splash .gheader, body.is-splash .bnav { display: none; }
 
 @media (min-width: 760px) {
   .type-list { grid-template-columns: 1fr 1fr; gap: 20px; }
-  .tcard { height: 290px; }
-  .tcard:hover .sticker:nth-child(1) { transform: rotate(-14deg) translateY(-8px); }
-  .tcard:hover .sticker:nth-child(2) { transform: rotate(0deg) translateY(-14px); }
-  .tcard:hover .sticker:nth-child(3) { transform: rotate(15deg) translateY(-8px); }
-  .tcard:hover .sticker:nth-child(4) { transform: rotate(-2deg) translateY(-6px); }
+  .tcard { min-height: 168px; }
+  .tcard:hover .tcard-shape { transform: translateY(-8px); }
 
   /* 템플릿: 스와이프 대신 한눈에 비교하는 그리드 */
   .carousel-wrap { margin: 0; }
@@ -329,12 +321,10 @@ body.is-splash .gheader, body.is-splash .bnav { display: none; }
 
   .hero { padding: var(--s-lg) 0 var(--s-xl); }
   .type-list { gap: var(--s-lg); }
-  .tcard { height: 320px; padding: 20px var(--s-lg) 0; }
-  .sticker { width: 132px; margin: 0 -10px; }
-  .sticker:nth-child(2) { width: 146px; }
-  .tcard-stickers { bottom: -16px; }
-  .tcard[data-type="holiday"] .sticker { width: 114px; }
-  .tcard[data-type="holiday"] .sticker:nth-child(2) { width: 124px; }
+  .tcard { min-height: 190px; padding: var(--s-lg) var(--s-xl); }
+  .tcard-title { font-size: 28px; }
+  .tcard-desc { font-size: 16px; }
+  .tcard-count { top: 18px; right: 18px; font-size: 14px; }
 
   .splash { padding: var(--s-xl) max(var(--gutter), calc((100vw - 1180px) / 2 + var(--gutter))) 40px; }
   .splash h1 { margin-top: var(--s-md); }
