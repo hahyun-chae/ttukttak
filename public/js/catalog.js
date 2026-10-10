@@ -89,24 +89,66 @@ export function fieldsForType(type) {
   return Object.keys(EXTRA_FIELDS).filter((k) => EXTRA_FIELDS[k].types.includes(type));
 }
 
-// 공지 유형 4개 × 템플릿 3개 × 색상 2개 = 24개 변형
+// 피그마 시안 템플릿. 배경 이미지는 public/templates/ (원본: design/뚝딱 템플릿 파일)
+// 레이아웃처럼 등록해 두면 관리자 화면·색상(변형) 선택이 기존 방식 그대로 동작한다.
+const bgImage = (name, ext = 'png') => ({ image: `/templates/${name}.${ext}`, imageSm: `/templates/${name}-sm.jpg` });
+const figma = (name, design, palettes) => ({ name, figma: true, design, palettes });
+const one = (name, ext, bg, accent) => ({ base: { name: '기본', bg, accent, ...bgImage(name, ext) } });
+const photo = (id, name, at) => ({ name, bg: '#2F3B33', accent: '#FFFFFF', swatch: `/templates/photo-${id}-xs.jpg`, at, ...bgImage(`photo-${id}`, 'jpg') });
+
+Object.assign(LAYOUTS, {
+  chuseokMoon: figma('추석 · 보름달 밤하늘', 'chuseokMoon', one('chuseok-moon', 'jpg', '#1A2A57', '#F2D48A')),
+  harvestWave: figma('추석·설날 · 따뜻한 물결', 'harvestWave', one('harvest-wave', 'jpg', '#FCEBDD', '#C2532F')),
+  xmasTree: figma('크리스마스 · 트리', 'xmasTree', one('xmas-tree', 'png', '#EEEAE3', '#5F7352')),
+  xmasRed: figma('크리스마스 · 레드 카드', 'xmasRed', one('xmas-red', 'png', '#991A1C', '#FFF9EF')),
+  hangeul: figma('한글날', 'hangeul', one('hangeul', 'png', '#F2EBDD', '#C9553A')),
+  seollal: figma('설날 · 색동과 산', 'seollal', one('seollal', 'png', '#F4EFE6', '#C8423B')),
+  calendarMonth: figma('만능 · 월간 달력', 'calendarMonth', one('calendar-month', 'png', '#D6E4FF', '#1F4FD8')),
+  catNotice: figma('만능 · 고양이 NOTICE', 'catNotice', one('cat-notice', 'png', '#F4F0E6', '#4A78B5')),
+  blueGradient: figma('만능 · 블루 그라데이션', 'blueGradient', one('blue-gradient', 'jpg', '#7FB2DC', '#FFFFFF')),
+  memoDark: figma('만능 · 메모지', 'memoDark', one('memo-dark', 'png', '#322421', '#EFEAE0')),
+  weekNotice: figma('만능 · 주간 Notice', 'weekNotice', one('week-notice', 'png', '#FFFCF6', '#9B7C53')),
+  softWave: figma('만능 · 물결 테두리', 'softWave', one('soft-wave', 'jpg', '#FBF7EF', '#FF686F')),
+  photo: figma('만능 · 사진형', 'photo', {
+    lake: photo('lake', '호수', { kicker: 303.6, s: 1, store: 792 }),
+    duck: photo('duck', '물결', { kicker: 246, s: 0.8, store: 806 }),
+    beach: photo('beach', '바다', { kicker: 318, s: 0.8, store: 829, notice: 237.7 }),
+    dusk: photo('dusk', '노을', { kicker: 332, s: 0.8, store: 788, notice: 208.7 }),
+    clouds: photo('clouds', '구름', { kicker: 309, s: 0.8, store: 788, notice: 156 }),
+    flowers: photo('flowers', '꽃밭', { kicker: 309, s: 0.8, store: 788, notice: 156 }),
+  }),
+});
+
+// 명절 안내에서 고르는 날. 템플릿의 occasions 가 비어 있으면 모든 날에 쓸 수 있다.
+export const OCCASIONS = ['설날', '추석', '크리스마스', '한글날', '기타'];
+
+// 저장된 템플릿 목록을 새 기본 템플릿으로 바꿔야 할 때 올린다 (lib/store.js 참고)
+export const CATALOG_VERSION = 2;
+
+const ALL = ['holiday', 'closed', 'short', 'soldout'];
+const ALL_FIELDS = ['reason', 'nextOpen', 'note'];
+
+// types: 들어가는 공지 유형 / occasions: 명절 안내에서 해당하는 날 (없으면 전체)
 export const DEFAULT_TEMPLATES = [
-  { id: 'holiday-clean', type: 'holiday', name: '단정한 일정표', layout: 'clean', tone: 'polite', keywords: ['깔끔한'], palettes: ['mono', 'green'], fields: ['note'], badge: '추천', order: 1 },
-  { id: 'holiday-premium', type: 'holiday', name: '격식 있는 명절 인사', layout: 'premium', tone: 'premium', keywords: ['고급스러운'], palettes: ['navy', 'ivory'], fields: ['note'], badge: 'HOT', order: 2 },
-  { id: 'holiday-bold', type: 'holiday', name: '한눈에 쏙', layout: 'bold', tone: 'short', keywords: ['눈에 잘 띄는'], palettes: ['yellow', 'red'], fields: [], badge: '', order: 3 },
+  { id: 'chuseok-moon', name: '보름달 밤하늘', layout: 'chuseokMoon', types: ['holiday'], occasions: ['추석'], keywords: ['고급스러운'], palettes: ['base'], fields: ['note'], badge: '추천', order: 1 },
+  { id: 'harvest-wave', name: '따뜻한 물결', layout: 'harvestWave', types: ['holiday'], occasions: ['추석', '설날'], keywords: ['감성적인'], palettes: ['base'], fields: ['note'], badge: '', order: 2 },
+  { id: 'xmas-tree', name: '크리스마스 트리', layout: 'xmasTree', types: ['holiday'], occasions: ['크리스마스'], keywords: ['감성적인'], palettes: ['base'], fields: ['note'], badge: '추천', order: 3 },
+  { id: 'xmas-red', name: '레드 홀리데이', layout: 'xmasRed', types: ['holiday'], occasions: ['크리스마스'], keywords: ['고급스러운'], palettes: ['base'], fields: ['note'], badge: '', order: 4 },
+  { id: 'hangeul', name: '한글날 붓글씨', layout: 'hangeul', types: ['holiday'], occasions: ['한글날'], keywords: ['깔끔한'], palettes: ['base'], fields: ['note'], badge: '추천', order: 5 },
+  { id: 'seollal', name: '색동 설날', layout: 'seollal', types: ['holiday'], occasions: ['설날'], keywords: ['깔끔한'], palettes: ['base'], fields: ['note'], badge: '추천', order: 6 },
+  { id: 'calendar-month', name: '한눈에 달력', layout: 'calendarMonth', types: ['closed', 'holiday'], occasions: [], keywords: ['깔끔한'], palettes: ['base'], fields: ALL_FIELDS, badge: '요즘 많이 쓰는', order: 7 },
+  { id: 'cat-notice', name: '고양이 NOTICE', layout: 'catNotice', types: ['closed', 'short', 'soldout'], occasions: [], keywords: ['트렌디한'], palettes: ['base'], fields: ALL_FIELDS, badge: '', order: 8 },
+  { id: 'blue-gradient', name: '블루 그라데이션', layout: 'blueGradient', types: ['closed', 'short'], occasions: [], keywords: ['트렌디한'], palettes: ['base'], fields: ALL_FIELDS, badge: '', order: 9 },
+  { id: 'memo-dark', name: '메모지 한 장', layout: 'memoDark', types: ALL, occasions: [], keywords: ['감성적인'], palettes: ['base'], fields: ALL_FIELDS, badge: '', order: 10 },
+  { id: 'week-notice', name: '주간 Notice', layout: 'weekNotice', types: ['closed', 'holiday'], occasions: [], keywords: ['고급스러운'], palettes: ['base'], fields: ALL_FIELDS, badge: '', order: 11 },
+  { id: 'soft-wave', name: '물결 테두리', layout: 'softWave', types: ALL, occasions: [], keywords: ['눈에 잘 띄는'], palettes: ['base'], fields: ALL_FIELDS, badge: 'HOT', order: 12 },
+  { id: 'photo', name: '사진 감성', layout: 'photo', types: ['closed', 'short', 'holiday'], occasions: [], keywords: ['감성적인'], palettes: ['lake', 'duck', 'beach', 'dusk', 'clouds', 'flowers'], fields: ALL_FIELDS, badge: '', order: 13 },
+].map((t) => ({ public: true, thumbnail: null, asset: null, downloads: 0, tone: 'polite', type: t.types[0], ...t }));
 
-  { id: 'closed-soft', type: 'closed', name: '쉼표 하나', layout: 'soft', tone: 'warm', keywords: ['감성적인'], palettes: ['peach', 'sage'], fields: ['reason', 'note'], badge: '', order: 1 },
-  { id: 'closed-clean', type: 'closed', name: '기본 휴무 안내', layout: 'clean', tone: 'polite', keywords: ['깔끔한'], palettes: ['mono', 'blue'], fields: ['reason'], badge: '요즘 많이 쓰는', order: 2 },
-  { id: 'closed-bold', type: 'closed', name: '굵고 확실하게', layout: 'bold', tone: 'short', keywords: ['눈에 잘 띄는'], palettes: ['yellow', 'orange'], fields: [], badge: '', order: 3 },
-
-  { id: 'short-clean', type: 'short', name: '시간 비교표', layout: 'clean', tone: 'polite', keywords: ['깔끔한'], palettes: ['mono', 'green'], fields: ['reason'], badge: '추천', order: 1 },
-  { id: 'short-trendy', type: 'short', name: '요즘 감성', layout: 'trendy', tone: 'short', keywords: ['트렌디한'], palettes: ['lime', 'blue'], fields: ['note'], badge: '', order: 2 },
-  { id: 'short-premium', type: 'short', name: '차분한 안내', layout: 'premium', tone: 'premium', keywords: ['고급스러운'], palettes: ['ivory', 'navy'], fields: ['reason'], badge: '', order: 3 },
-
-  { id: 'soldout-bold', type: 'soldout', name: '완판 알림', layout: 'bold', tone: 'short', keywords: ['눈에 잘 띄는'], palettes: ['red', 'yellow'], fields: ['nextOpen'], badge: 'HOT', order: 1 },
-  { id: 'soldout-soft', type: 'soldout', name: '따뜻한 감사', layout: 'soft', tone: 'warm', keywords: ['감성적인'], palettes: ['peach', 'lavender'], fields: ['nextOpen', 'note'], badge: '', order: 2 },
-  { id: 'soldout-trendy', type: 'soldout', name: '오늘의 품절', layout: 'trendy', tone: 'short', keywords: ['트렌디한'], palettes: ['pink', 'lime'], fields: ['nextOpen'], badge: '', order: 3 },
-].map((t) => ({ public: true, thumbnail: null, asset: null, downloads: 0, ...t }));
+// 템플릿이 이 공지 유형에 들어가는지 (예전 템플릿은 type 하나만 가진다)
+export function templateHasType(t, type) {
+  return (t.types?.length ? t.types : [t.type]).includes(type);
+}
 
 export const DEFAULT_SETTINGS = {
   typeBadges: { holiday: 'HOT' },

@@ -4,3 +4,6 @@ data/
 .env
 .env.*
 .DS_Store
+
+# 피그마 원본(PNG·SVG·폰트) — 서비스는 public/templates, public/fonts 의 변환본만 쓴다
+design/

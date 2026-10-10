@@ -3,6 +3,7 @@
 
 import { A4, getPalette } from './catalog.js';
 import { buildDoc } from './copy.js';
+import { isFigmaTemplate, renderFigma } from './figma.js';
 
 const { W, H } = A4;
 
@@ -727,6 +728,7 @@ function docText(doc) {
  * @param {{type, data, template, paletteId, width}} o  width 는 캔버스 픽셀 폭(기본 2480 = 300dpi)
  */
 export async function renderNotice(canvas, { type, data, template, paletteId, width = W }) {
+  if (isFigmaTemplate(template)) return renderFigma(canvas, { type, data, template, paletteId, width });
   const doc = buildDoc(type, data, template);
   const layout = LAYOUT_RENDER[template.layout] ? template.layout : 'clean';
   const p = getPalette(layout, paletteId || template.palettes?.[0]);

@@ -1,4 +1,4 @@
-import { TYPES, LAYOUTS, STYLE_KEYWORDS, BADGES, TONES, EXTRA_FIELDS, fieldsForType, A4 } from './catalog.js';
+import { TYPES, LAYOUTS, OCCASIONS, STYLE_KEYWORDS, BADGES, TONES, EXTRA_FIELDS, fieldsForType, templateHasType, A4 } from './catalog.js';
 import { sampleData } from './copy.js';
 import { renderNotice } from './render.js';
 
@@ -6,6 +6,8 @@ const $root = document.getElementById('admin');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (v) => (v == null ? '-' : `${Math.round(v * 1000) / 10}%`);
 const typeName = (id) => TYPES.find((t) => t.id === id)?.short || id;
+const typeNames = (t) => (t.types?.length ? t.types : [t.type]).map(typeName).join(', ') + (t.occasions?.length ? ` (${t.occasions.join(', ')})` : '');
+const paletteName = (t, p) => LAYOUTS[t.layout]?.palettes[p]?.name || p;
 
 const st = { key: '', tab: 'templates', templates: [], settings: {}, stats: null, editing: null, filter: 'all' };
 try { st.key = sessionStorage.getItem('nh.admin') || ''; } catch { /* noop */ }
@@ -73,7 +75,7 @@ function shell() {
 
 // ---------- 템플릿 목록 ----------
 function templatesTab() {
-  const list = st.templates.filter((t) => st.filter === 'all' || t.type === st.filter).sort((a, b) => a.type.localeCompare(b.type) || a.order - b.order);
+  const list = st.templates.filter((t) => st.filter === 'all' || templateHasType(t, st.filter)).sort((a, b) => a.type.localeCompare(b.type) || a.order - b.order);
   document.getElementById('main').innerHTML = `
   <div class="toolbar">
     <select id="filter">${[['all', '전체 유형'], ...TYPES.map((t) => [t.id, t.short])].map(([v, l]) => `<option value="${v}" ${st.filter === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -86,9 +88,9 @@ function templatesTab() {
       <tr>
         <td><div class="thumb" data-thumb="${t.id}">${t.thumbnail ? `<img src="${esc(t.thumbnail)}" alt="">` : ''}</div></td>
         <td><b>${esc(t.name)}</b><div class="muted mono">${esc(t.id)}</div>${t.asset ? '<div class="pill">Figma 에셋</div>' : ''}</td>
-        <td>${typeName(t.type)}</td>
+        <td>${esc(typeNames(t))}</td>
         <td>${t.keywords.map(esc).join(', ')}<div class="muted">${esc(TONES[t.tone] || t.tone)} 문구</div></td>
-        <td>${t.palettes.map((p) => esc(LAYOUTS[t.layout]?.palettes[p]?.name || p)).join(', ')}</td>
+        <td>${t.palettes.map((p) => esc(paletteName(t, p))).join(', ')}</td>
         <td><select data-badge="${t.id}"><option value="">없음</option>${BADGES.map((b) => `<option ${t.badge === b ? 'selected' : ''}>${b}</option>`).join('')}</select></td>
         <td><label class="sw"><input type="checkbox" data-public="${t.id}" ${t.public ? 'checked' : ''}><span></span></label></td>
         <td class="num">${t.downloads || 0}</td>
@@ -100,7 +102,7 @@ function templatesTab() {
     if (t.thumbnail) continue;
     const c = document.createElement('canvas');
     $root.querySelector(`[data-thumb="${t.id}"]`).appendChild(c);
-    renderNotice(c, { type: t.type, data: sampleData(t.type), template: t, paletteId: t.palettes[0], width: 160 });
+    renderNotice(c, { type: t.type, data: sampleData(t.type, t.occasions?.[0]), template: t, paletteId: t.palettes[0], width: 160 });
   }
   const main = document.getElementById('main');
   main.querySelector('#filter').onchange = (e) => { st.filter = e.target.value; templatesTab(); };
@@ -130,7 +132,9 @@ function openEditor(tpl) {
   const modal = document.getElementById('modal');
   const draw = () => {
     const layout = LAYOUTS[t.layout];
-    const allowed = fieldsForType(t.type);
+    t.types = t.types?.length ? t.types : [t.type];
+    t.occasions ||= [];
+    const allowed = [...new Set(t.types.flatMap(fieldsForType))];
     t.fields = t.fields.filter((f) => allowed.includes(f));
     t.palettes = t.palettes.filter((p) => layout.palettes[p]);
     if (!t.palettes.length) t.palettes = [Object.keys(layout.palettes)[0]];
@@ -141,7 +145,8 @@ function openEditor(tpl) {
         <form class="grid" id="ed" onsubmit="return false">
           <label>템플릿 ID<input name="id" value="${esc(t.id)}" ${isNew ? '' : 'disabled'} placeholder="예: closed-modern" pattern="[a-z0-9][a-z0-9-]+"></label>
           <label>템플릿명<input name="name" value="${esc(t.name)}" placeholder="예: 모던 휴무 안내"></label>
-          <label>공지 유형<select name="type">${TYPES.map((x) => `<option value="${x.id}" ${t.type === x.id ? 'selected' : ''}>${x.name}</option>`).join('')}</select></label>
+          <fieldset><legend>공지 유형</legend>${TYPES.map((x) => `<label class="check"><input type="checkbox" name="types" value="${x.id}" ${t.types.includes(x.id) ? 'checked' : ''}> ${x.short}</label>`).join('')}</fieldset>
+          ${t.types.includes('holiday') ? `<fieldset><legend>명절 안내에서 보일 날 <span class="muted">(모두 비우면 전체)</span></legend>${OCCASIONS.map((o) => `<label class="check"><input type="checkbox" name="occ" value="${o}" ${t.occasions.includes(o) ? 'checked' : ''}> ${o === '기타' ? '기타 공휴일' : o}</label>`).join('')}</fieldset>` : ''}
           <label>레이아웃<select name="layout">${Object.entries(LAYOUTS).map(([id, l]) => `<option value="${id}" ${t.layout === id ? 'selected' : ''}>${l.name}</option>`).join('')}</select></label>
           <label>문구 톤<select name="tone">${Object.entries(TONES).map(([id, l]) => `<option value="${id}" ${t.tone === id ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <label>정렬 순서<input name="order" type="number" value="${t.order}"></label>
@@ -174,7 +179,7 @@ function openEditor(tpl) {
       </div>
     </div></div>`;
     for (const p of t.palettes) {
-      renderNotice(modal.querySelector(`[data-pv="${p}"]`), { type: t.type, data: sampleData(t.type), template: t, paletteId: p, width: 420 });
+      renderNotice(modal.querySelector(`[data-pv="${p}"]`), { type: t.type, data: sampleData(t.type, t.occasions?.[0]), template: t, paletteId: p, width: 420 });
     }
   };
   draw();
@@ -184,7 +189,10 @@ function openEditor(tpl) {
     const fd = new FormData(f);
     if (isNew) t.id = fd.get('id').trim();
     t.name = fd.get('name');
-    t.type = fd.get('type');
+    t.types = fd.getAll('types');
+    if (!t.types.length) t.types = [t.type];
+    t.type = t.types[0];
+    t.occasions = t.types.includes('holiday') ? fd.getAll('occ') : [];
     t.layout = fd.get('layout');
     t.tone = fd.get('tone');
     t.order = Number(fd.get('order')) || 0;
@@ -283,7 +291,7 @@ async function statsTab() {
   </section>
   <div class="two">
     <section class="panel"><h3>공지 유형 선택</h3><table class="table compact">${s.types.map((t) => `<tr><td>${esc(t.name)}</td><td class="num">${t.selects}</td></tr>`).join('')}</table></section>
-    <section class="panel"><h3>템플릿 선택률 · 다운로드</h3><table class="table compact"><tr><th>템플릿</th><th>선택률</th><th>다운로드</th></tr>${s.templates.sort((a, b) => b.downloads - a.downloads).map((t) => `<tr><td>${esc(t.name)} <span class="muted">${typeName(t.type)}</span></td><td class="num">${pct(t.selectRate)}</td><td class="num">${t.downloads}</td></tr>`).join('')}</table></section>
+    <section class="panel"><h3>템플릿 선택률 · 다운로드</h3><table class="table compact"><tr><th>템플릿</th><th>선택률</th><th>다운로드</th></tr>${s.templates.sort((a, b) => b.downloads - a.downloads).map((t) => `<tr><td>${esc(t.name)} <span class="muted">${esc(typeNames(t))}</span></td><td class="num">${pct(t.selectRate)}</td><td class="num">${t.downloads}</td></tr>`).join('')}</table></section>
   </div>`;
 }
 

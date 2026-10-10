@@ -1,4 +1,4 @@
-import { TYPES, LAYOUTS, REASONS, DEFAULT_TEMPLATES, DEFAULT_SETTINGS, getPalette, A4 } from './catalog.js';
+import { TYPES, LAYOUTS, REASONS, OCCASIONS, EXTRA_FIELDS, DEFAULT_TEMPLATES, DEFAULT_SETTINGS, getPalette, templateHasType, A4 } from './catalog.js';
 import { defaultData, sampleData, dateRange, fmtLong, addDays, holidayRows, holidayPeriodName, buildDoc } from './copy.js';
 import { renderNotice } from './render.js';
 import { canvasToPdf, canvasToPng, saveBlob } from './export.js';
@@ -41,7 +41,10 @@ function track(name, props = {}) {
 // ---------- 유틸 ----------
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const typeOf = (id) => TYPES.find((t) => t.id === id);
-const templatesOf = (type) => state.templates.filter((t) => t.type === type);
+// 명절 안내는 고른 날(설날·추석·크리스마스 등)에 맞는 시안과 만능 시안만 보여준다
+// occasion 을 따로 주지 않으면 지금 입력 중인 명절 이름을 쓰고, 그것도 없으면 거르지 않는다
+const templatesOf = (type, occasion = type === 'holiday' && state.type === 'holiday' ? state.data?.name : null) =>
+  state.templates.filter((t) => templateHasType(t, type) && (!occasion || !t.occasions?.length || t.occasions.includes(occasion)));
 const paletteOf = (tpl) => state.palette[tpl.id] || tpl.palettes[0];
 const isDesktop = () => window.matchMedia('(min-width: 900px)').matches;
 
@@ -176,7 +179,7 @@ function home() {
     <div class="type-list">
       ${TYPES.map((t) => {
         const badge = state.settings.typeBadges?.[t.id];
-        const count = templatesOf(t.id).length;
+        const count = templatesOf(t.id, null).length;
         return `<button class="tcard" data-type="${t.id}">
           <span class="tcard-meta">
             <span class="tcard-count"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="1.5" width="9" height="12" rx="1.5"/><path d="M5 4.5h4M5 7h4"/><path d="M13.5 4v9.5a1.5 1.5 0 0 1-1.5 1.5H5"/></svg>디자인 ${count}종</span>
@@ -195,12 +198,13 @@ function drawTypeThumbs() {
   for (const t of TYPES) {
     const holder = $view.querySelector(`[data-thumb="${t.id}"]`);
     if (!holder) continue;
-    const tpl = templatesOf(t.id)[0];
+    const sample = sampleData(t.id);
+    const tpl = templatesOf(t.id, sample.name)[0];
     if (!tpl) { holder.textContent = t.short; holder.classList.add('icon-only'); continue; }
     if (tpl.thumbnail) { holder.innerHTML = `<img src="${esc(tpl.thumbnail)}" alt="">`; continue; }
     let c = holder.querySelector('canvas');
     if (!c) { c = document.createElement('canvas'); holder.appendChild(c); }
-    draw(c, { type: t.id, data: sampleData(t.id), template: tpl, paletteId: paletteOf(tpl) });
+    draw(c, { type: t.id, data: sample, template: tpl, paletteId: paletteOf(tpl) });
   }
 }
 
@@ -239,7 +243,7 @@ function infoForm() {
       const rows = holidayRows(d);
       return `
       ${section('어떤 날인가요?', `
-        ${chips('name', [['설날', '설날'], ['추석', '추석'], ['기타', '기타 공휴일']], d.name)}
+        ${chips('name', OCCASIONS.map((o) => [o, o === '기타' ? '기타 공휴일' : o]), d.name)}
         ${d.name === '기타' ? field('공휴일 이름', input('customName', 'text', d.customName, 'placeholder="예: 한글날, 성탄절" maxlength="12"')) : ''}`)}
       ${section('기간과 영업시간', `
         ${field('기간', `<div class="row2 dates">${input('start', 'date', d.start, 'data-rerender')}<span class="tilde">~</span>${input('end', 'date', d.end, 'data-rerender')}</div>`, '하루만 해당되면 같은 날짜를 고르세요.')}
@@ -441,19 +445,20 @@ function updateTplInfo() {
   document.getElementById('tplinfo').innerHTML = `
     <div class="tpl-name">${esc(t.name)} ${t.badge ? `<span class="badge inline">${esc(t.badge)}</span>` : ''}</div>
     <div class="tags">${t.keywords.map((k) => `<span class="tag">#${esc(k)}</span>`).join('')}</div>
-    <div class="swatches" role="radiogroup" aria-label="색상">
+    ${t.palettes.length > 1 ? `<div class="swatches" role="radiogroup" aria-label="${layout.figma ? '배경' : '색상'}">
       ${t.palettes.map((pid) => {
         const p = getPalette(t.layout, pid);
-        return `<button class="swatch ${paletteOf(t) === pid ? 'on' : ''}" data-palette="${pid}" role="radio" aria-checked="${paletteOf(t) === pid}" title="${esc(layout.palettes[pid]?.name || pid)}" style="--a:${p.panel || p.bg};--b:${p.accent}"></button>`;
+        const img = p.swatch ? `;background:center/cover url('${esc(p.swatch)}')` : '';
+        return `<button class="swatch ${paletteOf(t) === pid ? 'on' : ''}" data-palette="${pid}" role="radio" aria-checked="${paletteOf(t) === pid}" title="${esc(layout.palettes[pid]?.name || pid)}" style="--a:${p.panel || p.bg};--b:${p.accent}${img}"></button>`;
       }).join('')}
       <span class="swatch-label">${esc(layout.palettes[paletteOf(t)]?.name || '')}</span>
-    </div>`;
+    </div>` : ''}`;
 }
 
 // ---------- 3. 추가 정보 + 최종 확인 ----------
 function extraForm() {
   const d = state.data;
-  const f = new Set(state.template.fields || []);
+  const f = new Set((state.template.fields || []).filter((k) => EXTRA_FIELDS[k]?.types.includes(state.type)));
   let html = '';
   if (f.has('reason')) {
     const label = state.type === 'closed' ? '휴무 사유' : '단축 사유';
@@ -470,7 +475,7 @@ function extraForm() {
 }
 
 function extra() {
-  const hasFields = (state.template.fields || []).length > 0;
+  const hasFields = (state.template.fields || []).some((k) => EXTRA_FIELDS[k]?.types.includes(state.type));
   $view.innerHTML = `
   <main class="screen flow">
     ${topbar('extra', hasFields ? '추가 정보' : '마지막 확인')}

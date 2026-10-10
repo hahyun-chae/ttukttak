@@ -1,0 +1,6 @@
+/* 피그마 시안에 쓰인 무료 배포 폰트 (원본: design/뚝딱 템플릿 파일/fonts, 쓰는 글자만 남겨 용량을 줄였다) */
+@font-face { font-family: "NPS"; font-weight: 800; font-display: swap; src: url("/fonts/nps-extrabold.woff2") format("woff2"); }
+@font-face { font-family: "Ownglyph PDH"; font-weight: 400; font-display: swap; src: url("/fonts/ownglyph-pdh.woff2") format("woff2"); }
+@font-face { font-family: "Nanum GoDigANiGoGoDing"; font-weight: 400; font-display: swap; src: url("/fonts/nanum-godigani.woff2") format("woff2"); }
+@font-face { font-family: "Arita Buri"; font-weight: 500; font-display: swap; src: url("/fonts/arita-buri-medium.woff2") format("woff2"); }
+@font-face { font-family: "EF Jejudoldam"; font-weight: 400; font-display: swap; src: url("/fonts/ef-jejudoldam.woff2") format("woff2"); }

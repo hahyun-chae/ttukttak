@@ -49,7 +49,7 @@ export function dowOf(iso) {
 const range = (a, b) => `${a} ~ ${b}`;
 
 // 받침에 따라 '로'/'으로'
-function ro(word) {
+export function ro(word) {
   const ch = word.trim().slice(-1);
   const code = ch.charCodeAt(0) - 0xac00;
   if (code < 0 || code > 11171) return '로';
@@ -76,6 +76,7 @@ export function holidayRows(d) {
 export function holidayPeriodName(d) {
   if (d.name === '설날') return '설 연휴';
   if (d.name === '추석') return '추석 연휴';
+  if (d.name === '크리스마스' || d.name === '한글날') return d.name;
   return (d.customName || '').trim() || '공휴일';
 }
 
@@ -233,10 +234,14 @@ export function defaultData(type) {
   }
 }
 
-export function sampleData(type) {
+// occasion: 명절 안내 예시를 그 날(설날·크리스마스 등)에 맞춰 보여줄 때
+export function sampleData(type, occasion) {
   const base = { ...defaultData(type), storeName: '행복분식', showStore: true };
   switch (type) {
     case 'holiday':
+      if (occasion === '설날') return { ...base, name: '설날', start: '2026-02-16', end: '2026-02-18', mode: 'allClosed', days: {} };
+      if (occasion === '크리스마스') return { ...base, name: '크리스마스', start: '2026-12-24', end: '2026-12-25', mode: 'partial', days: { '2026-12-24': { status: 'short', open: '10:00', close: '19:00' }, '2026-12-25': { status: 'off' } } };
+      if (occasion === '한글날') return { ...base, name: '한글날', start: '2026-10-09', end: '2026-10-09', mode: 'allClosed', days: {} };
       return { ...base, name: '추석', start: '2026-09-24', end: '2026-09-26', mode: 'mixed', days: { '2026-09-25': { status: 'off' }, '2026-09-26': { status: 'short', open: '12:00', close: '18:00' } } };
     case 'closed':
       return { ...base, start: '2026-10-14', reason: '내부 공사' };
