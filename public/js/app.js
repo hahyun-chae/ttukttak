@@ -20,7 +20,7 @@ const state = {
   palette: {}, // templateId → paletteId
   template: null,
   libraryId: null, // 보관함에서 불러와 수정 중인 항목
-  survey: { rating: 0, willUse: null, comment: '', sent: false },
+  survey: { rating: 0, comment: '', sent: false, closed: false },
 };
 
 // ---------- 저장 / 분석 ----------
@@ -698,7 +698,7 @@ function editFromLibrary(item) {
   state.palette[state.template.id] = item.paletteId;
   state.tplIndex = Math.max(0, templatesOf(item.type).findIndex((t) => t.id === state.template.id));
   state.libraryId = item.id;
-  state.survey = { rating: 0, willUse: null, comment: '', sent: false };
+  state.survey = { rating: 0, comment: '', sent: false, closed: false };
   go('info');
 }
 
@@ -722,29 +722,36 @@ function done() {
           ${canShare ? '<button class="btn secondary" data-act="share">카톡·문자로 공유</button>' : ''}
           <button class="btn ghost" data-act="download-pdf-again">PDF 다시 받기</button>
         </div>
-        <section class="survey" id="survey">${surveyHtml()}</section>
         <div class="done-actions row">
           <button class="btn ghost" data-act="nav-library">보관함 보기</button>
           <button class="btn primary" data-act="restart">새 안내문 만들기</button>
         </div>
       </section>
     </div>
+    ${state.survey.closed ? '' : `<div class="survey-backdrop" id="survey-backdrop">
+      <section class="survey" id="survey" role="dialog" aria-modal="true" aria-label="만족도 설문">${surveyHtml()}</section>
+    </div>`}
   </main>`;
   drawFinal();
 }
 
 function surveyHtml() {
   const s = state.survey;
-  if (s.sent) return '<p class="thanks">의견 고맙습니다! 더 좋은 안내문으로 보답할게요.</p>';
-  return `
-    <h3>잠깐! 만족하셨나요? <span class="opt">선택</span></h3>
+  const close = '<button class="survey-close" data-act="survey-close" aria-label="닫기">✕</button>';
+  if (s.sent) return `${close}<p class="thanks">감사합니다!<br>보내주신 의견을 바탕으로<br>더 좋은 템플릿을 준비할게요.</p>
+    <button class="btn primary" data-act="survey-close">닫기</button>`;
+  return `${close}
+    <h3>사장님! 제작 과정이 어땠나요?</h3>
     <div class="stars" role="radiogroup" aria-label="별점">
       ${[1, 2, 3, 4, 5].map((n) => `<button class="star ${n <= s.rating ? 'on' : ''}" data-star="${n}" aria-label="${n}점">★</button>`).join('')}
     </div>
-    <p class="q">실제로 매장에 사용하실 것 같나요?</p>
-    ${chips('willUse', [['true', '네, 쓸 거예요'], ['false', '아니요']], s.willUse === null ? '' : s.willUse)}
-    ${s.willUse === false ? `<input class="input" type="text" id="survey-comment" maxlength="100" placeholder="어떤 점이 아쉬웠나요? 한 줄이면 충분해요" value="${esc(s.comment)}">` : ''}
-    <button class="btn primary" data-act="survey-send" ${s.rating || s.willUse !== null ? '' : 'disabled'}>의견 보내기</button>`;
+    <label class="q" for="survey-comment">제작 경험을 알려주세요!</label>
+    <textarea class="input textarea" id="survey-comment" rows="3" maxlength="300" placeholder="좋았던 점, 아쉬웠던 점 무엇이든 좋아요">${esc(s.comment)}</textarea>
+    <button class="btn primary" id="survey-send" data-act="survey-send" ${canSendSurvey() ? '' : 'disabled'}>의견 보내기</button>`;
+}
+
+function canSendSurvey() {
+  return !!(state.survey.rating || state.survey.comment.trim());
 }
 
 function rerenderSurvey() {
@@ -752,8 +759,17 @@ function rerenderSurvey() {
   if (el) el.innerHTML = surveyHtml();
 }
 
+function closeSurvey() {
+  state.survey.closed = true;
+  document.getElementById('survey-backdrop')?.remove();
+}
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('survey-backdrop')) closeSurvey();
+});
+
 // ---------- 이벤트 ----------
 $root.addEventListener('click', async (e) => {
+  if (e.target.id === 'survey-backdrop') return closeSurvey();
   const el = e.target.closest('[data-act],[data-type],[data-chip],[data-palette],[data-star],[data-slide-i]');
   if (!el) return;
 
@@ -777,7 +793,6 @@ $root.addEventListener('click', async (e) => {
     const key = el.dataset.chip;
     const raw = el.dataset.v;
     const v = raw === 'true' ? true : raw === 'false' ? false : raw;
-    if (state.step === 'done') { state.survey.willUse = v; return rerenderSurvey(); }
     const d = state.data;
     if (key.startsWith('day:')) {
       const iso = key.slice(4);
@@ -888,16 +903,18 @@ $root.addEventListener('click', async (e) => {
     case 'survey-send': {
       const s = state.survey;
       s.comment = document.getElementById('survey-comment')?.value || '';
-      fetch('/api/survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid, templateId: state.template?.id, rating: s.rating || null, willUse: s.willUse, comment: s.willUse === false ? s.comment : '' }) }).catch(() => {});
-      track('survey_submit', { rating: s.rating || null, will_use: s.willUse, has_comment: !!(s.willUse === false && s.comment.trim()) });
+      fetch('/api/survey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid, templateId: state.template?.id, rating: s.rating || null, comment: s.comment.trim() }) }).catch(() => {});
+      track('survey_submit', { rating: s.rating || null, has_comment: !!s.comment.trim() });
       s.sent = true;
       return rerenderSurvey();
     }
+    case 'survey-close':
+      return closeSurvey();
     case 'restart':
       state.type = null;
       state.template = null;
       state.libraryId = null;
-      state.survey = { rating: 0, willUse: null, comment: '', sent: false };
+      state.survey = { rating: 0, comment: '', sent: false, closed: false };
       flow.startedAt = Date.now();
       track('create_start', { entry: 'restart' });
       return go('home');
@@ -931,7 +948,11 @@ function markFilled(key) {
 
 function onInput(e) {
   const el = e.target;
-  if (el.id === 'survey-comment') { state.survey.comment = el.value; return; }
+  if (el.id === 'survey-comment') {
+    state.survey.comment = el.value;
+    document.getElementById('survey-send').disabled = !canSendSurvey();
+    return;
+  }
   if (!state.data) return;
   if (el.dataset.menu !== undefined) { state.data.menus[Number(el.dataset.menu)] = el.value; drawLive(300); return; }
   const k = el.dataset.k;
